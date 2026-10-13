@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pvguardian
+      POSTGRES_PASSWORD: pvguardian
+      POSTGRES_DB: pvguardian
+    ports:
+      - "5433:5432"
+    volumes:
+      - pvguardian_pgdata:/var/lib/postgresql/data
+
+  ml-service:
+    build:
+      context: .
+      dockerfile: apps/ml-service/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://pvguardian:pvguardian@postgres:5432/pvguardian
+      AUTOMATION_ENABLED: "true"
+      AUTOMATION_DAILY_SECONDS: "86400"
+      AUTOMATION_WEEKLY_SECONDS: "604800"
+    ports:
+      - "8001:8000"
+    depends_on:
+      - postgres
+    volumes:
+      - pvguardian_models:/app/app/trained_models
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://pvguardian:pvguardian@postgres:5432/pvguardian?schema=public
+      ML_SERVICE_URL: http://ml-service:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - ml-service
+
+volumes:
+  pvguardian_pgdata:
+  pvguardian_models:

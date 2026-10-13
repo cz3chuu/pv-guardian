@@ -1,0 +1,20 @@
+"use client";
+import {useMemo,useState} from "react";
+import {DAILY_SHAPES,MONTHLY_CONSUMPTION_FACTORS,PROFILE_LABELS,type ConsumptionProfileId} from "@/lib/energy-balance";
+
+// Orientacyjne stawki brutto (energia + dystrybucja zmienna) -- tylko do wskazania najtanszych godzin.
+const STATIC_TARIFFS:Record<string,(hour:number)=>number>={G11:()=>1.15,G12:h=>h<6||h>=22||h===13||h===14?.72:1.32,G12w:h=>h<6||h>=22||h===13||h===14?.68:1.38};
+
+/** Profil 24 h ze zuzycia godzinowego z licznika: srednia dla kazdej godziny doby (kolumny: data/godzina;kWh). */
+function shapeFromMeterCsv(text:string):number[]|null{const sum=new Array(24).fill(0),count=new Array(24).fill(0);for(const line of text.split(/\r?\n/).slice(1)){const cells=line.split(/[;,\t]/).map(cell=>cell.trim().replace(/^"|"$/g,""));if(cells.length<2)continue;const value=Number(cells.at(-1)!.replace(",","."));const time=cells.slice(0,-1).join(" ").match(/(\d{1,2}):\d{2}/);if(!Number.isFinite(value)||!time)continue;const hour=Number(time[1])%24;sum[hour]+=value;count[hour]++}return count.every(item=>item>0)?sum.map((value,hour)=>value/count[hour]):null}
+
+export function ConsumptionLab({annual,profile,onProfile,csvShape,onCsvShape,rceMatrix}:{annual:number;profile:ConsumptionProfileId;onProfile:(id:ConsumptionProfileId)=>void;csvShape:number[]|null;onCsvShape:(shape:number[]|null)=>void;rceMatrix:number[][]|null}){
+  const [tariff,setTariff]=useState("G11"),[csvError,setCsvError]=useState("");
+  const month=new Date().getMonth();
+  // sredni dzien w biezacym miesiacu, w skali rocznego zuzycia
+  const hours=useMemo(()=>{const shape=csvShape??DAILY_SHAPES[profile],sum=shape.reduce((a,b)=>a+b,0)||1,monthFactor=MONTHLY_CONSUMPTION_FACTORS[month]/(MONTHLY_CONSUMPTION_FACTORS.reduce((a,b)=>a+b,0)/12);return shape.map(value=>value/sum*annual/365*monthFactor)},[annual,profile,csvShape,month]);
+  async function importCsv(file:File){const shape=shapeFromMeterCsv(await file.text());if(!shape){setCsvError("Nie rozpoznano pliku: potrzebne kolumny z godziną (np. 2025-01-01 13:00) i zużyciem kWh w ostatniej kolumnie, dla wszystkich 24 godzin doby.");return}setCsvError("");onCsvShape(shape)}
+  const dynamic=tariff==="Dynamiczna"&&rceMatrix?rceMatrix[month]:null;
+  const prices=hours.map((_,h)=>dynamic?(dynamic[h]+.12+.35)*1.23:STATIC_TARIFFS[tariff]?.(h)??1.15);
+  const smart=prices.map((p,h)=>({h,p})).sort((a,b)=>a.p-b.p).slice(0,5).map(x=>x.h).sort((a,b)=>a-b);
+  return <section className="panel consumption-lab"><div className="panel-head"><div><p className="eyebrow">Profil zużycia i taryfy</p><h2>Zapotrzebowanie godzinowe</h2></div><span>{csvShape?"profil z licznika":"profil modelowy"} · używany w bilansie</span></div><div className="profile-controls no-print"><label>Typ odbiorcy<select value={profile} onChange={e=>onProfile(e.target.value as ConsumptionProfileId)}>{Object.entries(PROFILE_LABELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label><label>Taryfa<select value={tariff} onChange={e=>setTariff(e.target.value)}><option>G11</option><option>G12</option><option>G12w</option><option value="Dynamiczna" disabled={!rceMatrix}>Dynamiczna (RCE)</option></select></label><label className="csv-import">Import CSV z licznika<input type="file" accept=".csv,text/csv" onChange={e=>e.target.files?.[0]&&void importCsv(e.target.files[0])}/></label>{csvShape&&<button type="button" onClick={()=>onCsvShape(null)}>Usuń profil z licznika</button>}</div>{csvError&&<p className="danger">{csvError}</p>}<div className="load-chart">{hours.map((x,h)=><div key={h} title={`${h}:00 · ${x.toFixed(2)} kWh · ${prices[h].toFixed(2)} zł/kWh`}><i style={{height:`${x/Math.max(...hours)*100}%`}} className={smart.includes(h)?"smart":""}/><span>{h%3===0?h:""}</span></div>)}</div><div className="tariff-advice"><strong>Najtańsze godziny ({tariff==="Dynamiczna"?"średnie RCE z tego miesiąca + marża 0,12 + dystrybucja 0,35 zł + VAT":"orientacyjne stawki taryfy"})</strong><p>{smart.map(h=>`${String(h).padStart(2,"0")}:00`).join(", ")}. W tych godzinach warto ładować magazyn i samochód z sieci.</p></div></section>}

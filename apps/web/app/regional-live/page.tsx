@@ -1,0 +1,2 @@
+import {RegionalLiveDashboard} from "./regional-live-dashboard";
+export default function RegionalLivePage(){return <main className="shell regional-shell"><div className="page-head"><div><p className="eyebrow">Polska · monitoring regionalny</p><h1>Mapa PV Live</h1><p className="lead">Prognozowany uzysk, zachmurzenie i anomalie instalacji w każdym województwie.</p></div><span className="live-pill"><i/> aktualizacje co 15 min</span></div><RegionalLiveDashboard/></main>}

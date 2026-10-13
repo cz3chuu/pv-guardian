@@ -1,0 +1,13 @@
+.roof-edge-length {
+  display: block;
+  border: 1px solid #ffc85788;
+  border-radius: 12px;
+  background: #07111fe8;
+  color: #ffc857;
+  padding: 3px 6px;
+  box-shadow: 0 2px 8px #0009;
+  font-size: 9px;
+  font-weight: 800;
+  pointer-events: none;
+  white-space: nowrap;
+}

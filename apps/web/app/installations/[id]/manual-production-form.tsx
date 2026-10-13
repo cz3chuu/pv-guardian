@@ -1,0 +1,9 @@
+"use client";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+function currentHour() { const now = new Date(); now.setMinutes(0,0,0); return new Date(now.getTime()-now.getTimezoneOffset()*60_000).toISOString().slice(0,16); }
+export function ManualProductionForm({ installationId }: { installationId: string }) {
+  const router=useRouter(); const [busy,setBusy]=useState(false); const [status,setStatus]=useState<string|null>(null);
+  async function submit(event:React.FormEvent<HTMLFormElement>){event.preventDefault();setBusy(true);setStatus(null);const form=new FormData(event.currentTarget);try{const response=await fetch(`/api/installations/${installationId}/production/manual`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({timestamp:new Date(String(form.get("timestamp"))).toISOString(),energyKwh:Number(form.get("energyKwh"))})});const data=await response.json();if(!response.ok)throw new Error(data.error??"Nie udało się zapisać odczytu");setStatus(`Zapisano ${data.reading.energyKwh} kWh dla ${new Date(data.reading.timestamp).toLocaleString("pl-PL")}.`);(event.currentTarget.elements.namedItem("energyKwh") as HTMLInputElement).value="";router.refresh();}catch(error){setStatus(`Błąd: ${error instanceof Error?error.message:String(error)}`);}finally{setBusy(false);}}
+  return <form className="manual-form" onSubmit={submit}><label>Data i godzina<input type="datetime-local" name="timestamp" defaultValue={currentHour()} required/></label><label>Wyprodukowana energia (kWh)<input type="number" name="energyKwh" min="0" step="0.001" placeholder="np. 2,45" required/></label><button className="button" disabled={busy}>{busy?"Zapisywanie…":"Zapisz odczyt"}</button>{status&&<p className={status.startsWith("Błąd")?"danger":"success"}>{status}</p>}<small>Istniejący odczyt dla tej samej godziny zostanie zaktualizowany.</small></form>;
+}

@@ -1,0 +1,97 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Installation {
+  id            String   @id @default(cuid())
+  name          String
+  latitude      Float
+  longitude     Float
+  peakPowerKwp  Float
+  tiltAngle     Float // kąt nachylenia paneli, stopnie
+  azimuth       Float // 0 = południe, zgodnie z konwencją PVGIS
+  losses        Float    @default(14) // % strat systemowych
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  weatherReadings    WeatherReading[]
+  productionReadings ProductionReading[]
+  forecasts          Forecast[]
+  anomalies          Anomaly[]
+
+  @@map("installations")
+}
+
+model WeatherReading {
+  id             String   @id @default(cuid())
+  installationId String
+  installation   Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  timestamp        DateTime // UTC, poczatek godziny
+  source           String // "open-meteo" (prognoza) | "open-meteo-history" (pogoda historyczna) | "pvgis"
+  shortwaveRadiation Float? // W/m2, GHI na plaszczyznie poziomej
+  tiltedRadiation  Float? // W/m2, promieniowanie na plaszczyznie paneli (POA)
+  cloudCover       Float? // %
+  temperature      Float? // stopnie C
+
+  createdAt DateTime @default(now())
+
+  @@unique([installationId, timestamp, source])
+  @@index([installationId, timestamp])
+  @@map("weather_readings")
+}
+
+model ProductionReading {
+  id             String   @id @default(cuid())
+  installationId String
+  installation   Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  timestamp  DateTime // UTC, poczatek godziny (10:00 = energia z 10:00-11:00)
+  energyKwh  Float // rzeczywista produkcja w danej godzinie
+  source     String @default("csv-upload")
+
+  createdAt DateTime @default(now())
+
+  @@unique([installationId, timestamp])
+  @@index([installationId, timestamp])
+  @@map("production_readings")
+}
+
+model Forecast {
+  id             String   @id @default(cuid())
+  installationId String
+  installation   Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  timestamp       DateTime
+  predictedKwh    Float
+  modelVersion    String // np. "xgboost-v1"
+  createdAt       DateTime @default(now())
+
+  @@unique([installationId, timestamp, modelVersion])
+  @@index([installationId, timestamp])
+  @@map("forecasts")
+}
+
+model Anomaly {
+  id             String   @id @default(cuid())
+  installationId String
+  installation   Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  periodStart    DateTime
+  periodEnd      DateTime
+  deviationPct   Float // np. -38 oznacza 38% poniżej oczekiwanej
+  suspectedCause String? // "zabrudzenie" | "cień" | "awaria-falownika" | "spadek-sprawnosci" | null
+  status         String @default("open") // "open" | "acknowledged" | "resolved"
+
+  createdAt DateTime @default(now())
+
+  @@unique([installationId, periodStart, periodEnd])
+  @@index([installationId, periodStart])
+  @@map("anomalies")
+}

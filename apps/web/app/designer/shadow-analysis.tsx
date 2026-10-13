@@ -1,0 +1,11 @@
+"use client";
+export type ShadowObstacle={id:string;longitude:number;latitude:number;kind:"chimney"|"skylight"|"vent"|"tree"|"building"|"custom";label:string;height:number;widthM:number;depthM:number;safetyMarginM:number};
+
+/**
+ * Wyniki liczone w projektancie (lib/solar.ts): dla kazdej godziny typowego
+ * roku PVGIS sprawdzamy, czy slonce jest za przeszkoda widziana z danego
+ * panelu, i odejmujemy zasloniete promieniowanie bezposrednie.
+ */
+export function ShadowAnalysis({obstacles,onChange,hasPanels,totalLossPct,surfaceLosses}:{obstacles:ShadowObstacle[];onChange:(items:ShadowObstacle[])=>void;hasPanels:boolean;totalLossPct:number;surfaceLosses:Array<{name:string;lossPct:number}>}){
+  return <section className="panel shadow-section no-print"><div className="panel-head"><div><p className="eyebrow">Analiza cienia</p><h2>Przeszkody i zacienienie</h2></div><span>{obstacles.length} przeszkód</span></div><div className="shadow-guide"><p>Położenie przeszkód edytujesz przy mapie dachu. Strata jest liczona godzina po godzinie z rzeczywistego położenia słońca i udziału promieniowania bezpośredniego (PVGIS). Wysokość to wysokość <strong>ponad poziom paneli</strong>.</p></div><div className="obstacle-list">{obstacles.map(item=><article key={item.id}><strong>{item.label}</strong><label>Wysokość ponad panele <input type="number" min="0" max="50" step=".1" value={item.height} onChange={e=>onChange(obstacles.map(x=>x.id===item.id?{...x,height:+e.target.value}:x))}/> m</label></article>)}{!obstacles.length&&<div className="empty">Nie dodano przeszkód — model przyjmuje brak lokalnego zacienienia.</div>}</div>{obstacles.length>0&&!hasPanels&&<div className="empty">Rozmieść panele na dachu, aby policzyć stratę od cienia.</div>}{hasPanels&&obstacles.length>0&&<><div className="shadow-results"><div><span>Strata roczna całej instalacji</span><strong>{totalLossPct.toFixed(1)}%</strong></div></div><div className="season-loss">{surfaceLosses.map(item=><div key={item.name}><span>{item.name}</span><i><b style={{width:`${Math.min(100,item.lossPct/30*100)}%`}}/></i><strong>{item.lossPct.toFixed(1)}%</strong></div>)}</div><p className="price-disclaimer">Model nie uwzględnia strat niedopasowania w stringu — bez optymalizatorów częściowy cień jednego modułu może obniżyć produkcję całego stringu bardziej.</p></>}</section>
+}

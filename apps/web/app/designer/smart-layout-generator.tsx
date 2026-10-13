@@ -1,0 +1,6 @@
+"use client";
+import type {SmartLayoutVariant} from "./smart-layout";
+
+export function SmartLayoutGenerator({variants,busy,onGenerate,onApply}:{variants:SmartLayoutVariant[];busy:boolean;onGenerate:()=>void;onApply:(variant:SmartLayoutVariant)=>void}){
+  return <section className="smart-layout-generator"><div className="smart-layout-head"><div><span>PV Layout AI</span><strong>Inteligentny generator wariantów</strong><p>Analizuje kąty, orientacje, przesunięcia siatki, przeszkody i zadaną moc.</p></div><button type="button" disabled={busy} onClick={onGenerate}>{busy?"Analizuję warianty…":"Generuj warianty"}</button></div>{variants.length>0&&<div className="smart-variant-grid">{variants.map(variant=><article key={variant.id} className={variant.id==="balanced"?"recommended":""}>{variant.id==="balanced"&&<em>REKOMENDOWANY</em>}<span>{variant.label}</span><strong>{variant.powerKwp.toFixed(2)} kWp</strong><small>{variant.panels.length} modułów · {variant.orientation} · obrót {variant.rotationDeg}°</small><p>{variant.description}</p><dl><div><dt>Wykorzystanie dachu</dt><dd>{variant.utilizationPct.toFixed(0)}%</dd></div><div><dt>Kolizje</dt><dd className="success">0</dd></div></dl><button type="button" onClick={()=>onApply(variant)}>Zastosuj układ</button></article>)}</div>}</section>
+}

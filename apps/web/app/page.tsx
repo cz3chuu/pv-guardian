@@ -1,0 +1,25 @@
+import Link from "next/link";
+import { prisma } from "@pv-guardian/db";
+import { FlowIcon, PvHeroVisual } from "./pv-visuals";
+
+export const dynamic = "force-dynamic";
+const fmt=new Intl.DateTimeFormat("pl-PL",{day:"2-digit",month:"short",year:"numeric"});
+const causeLabel=(cause:string|null)=>cause?.replaceAll("-"," ")??"do weryfikacji";
+
+export default async function HomePage(){
+  let databaseOnline=true;
+  const [installations,openAlerts,latestAlerts,production]=await Promise.all([
+    prisma.installation.findMany({orderBy:{createdAt:"desc"},include:{_count:{select:{anomalies:true,productionReadings:true}}}}),
+    prisma.anomaly.count({where:{status:"open"}}),
+    prisma.anomaly.findMany({take:5,orderBy:{periodStart:"desc"},include:{installation:{select:{name:true}}}}),
+    prisma.productionReading.aggregate({_sum:{energyKwh:true}}),
+  ]).catch(()=>{databaseOnline=false;return [[],0,[],{_sum:{energyKwh:null}}] as const});
+  const totalPower=installations.reduce((sum,item)=>sum+item.peakPowerKwp,0);
+  return <main className="shell">
+    {!databaseOnline&&<aside className="offline-notice"><span>Tryb lokalny</span><p>Baza danych jest wyłączona. Projektant i symulacja są dostępne, natomiast monitoring instalacji wymaga uruchomienia PostgreSQL.</p><Link href="/designer">Otwórz Projektanta PV →</Link></aside>}
+    <section className="hero hero-with-visual"><div><p className="eyebrow">Inteligentna energia słoneczna</p><h1>Zobacz energię, zanim trafi do sieci.</h1><p className="lead">Symuluj potencjał dachu, prognozuj produkcję i wykrywaj problemy instalacji w jednym systemie.</p><div className="hero-actions"><Link className="button" href="/simulation">Zasymuluj swój dach</Link><Link className="button secondary" href="/installations">Monitoruj instalację</Link></div></div><PvHeroVisual/></section>
+    <section className="flow-section"><div className="flow-title"><div><p className="eyebrow">Jak pracuje PV Guardian</p><h2>Od promienia słońca do konkretnej decyzji</h2></div></div><div className="pv-flow"><div className="flow-step"><span className="flow-icon"><FlowIcon name="weather"/></span><span><strong>Pogoda</strong><small>PVGIS · Open-Meteo</small></span></div><span className="flow-arrow">→</span><div className="flow-step"><span className="flow-icon"><FlowIcon name="model"/></span><span><strong>Model ML</strong><small>XGBoost · baseline</small></span></div><span className="flow-arrow">→</span><div className="flow-step"><span className="flow-icon"><FlowIcon name="energy"/></span><span><strong>Produkcja</strong><small>godzinowa · dzienna</small></span></div><span className="flow-arrow">→</span><div className="flow-step"><span className="flow-icon"><FlowIcon name="alert"/></span><span><strong>Diagnostyka</strong><small>cień · śnieg · awaria</small></span></div></div></section>
+    <section className="metrics" aria-label="Podsumowanie"><article className="metric"><div className="metric-head"><span className="metric-icon">▦</span><span>Instalacje</span></div><strong>{installations.length}</strong><small>{totalPower.toFixed(1)} kWp łącznie</small></article><article className="metric"><div className="metric-head"><span className="metric-icon">!</span><span>Otwarte alerty</span></div><strong className={openAlerts?"danger":"success"}>{openAlerts}</strong><small>{openAlerts?"wymagają uwagi":"wszystko działa poprawnie"}</small></article><article className="metric"><div className="metric-head"><span className="metric-icon">ϟ</span><span>Zarejestrowana energia</span></div><strong>{(production._sum.energyKwh??0).toFixed(1)}</strong><small>kWh we wszystkich odczytach</small></article></section>
+    <div className="dashboard-grid"><section className="panel"><div className="panel-head"><div><p className="eyebrow">Portfolio</p><h2>Instalacje</h2></div><Link href="/installations">Wszystkie →</Link></div><div className="installation-list">{installations.slice(0,5).map(item=><Link className="installation-row" href={`/installations/${item.id}`} key={item.id}><span className="status-dot"/><span className="grow"><strong>{item.name}</strong><small>{item.latitude.toFixed(3)}, {item.longitude.toFixed(3)}</small></span><span className="right"><strong>{item.peakPowerKwp} kWp</strong><small>{item._count.productionReadings} odczytów</small></span></Link>)}{!installations.length&&<div className="empty">Brak instalacji. Możesz zacząć od symulacji dachu.</div>}</div></section><section className="panel"><div className="panel-head"><div><p className="eyebrow">Anomalie</p><h2>Ostatnie alerty</h2></div></div><div className="alert-list">{latestAlerts.map(alert=><Link className="alert-row" href={`/installations/${alert.installationId}`} key={alert.id}><span className={`alert-icon ${alert.status}`}>!</span><span className="grow"><strong>{causeLabel(alert.suspectedCause)}</strong><small>{alert.installation.name} · {fmt.format(alert.periodStart)}</small></span><strong className="danger">{alert.deviationPct.toFixed(0)}%</strong></Link>)}{!latestAlerts.length&&<div className="empty success">Nie wykryto jeszcze żadnych anomalii.</div>}</div></section></div>
+  </main>;
+}
